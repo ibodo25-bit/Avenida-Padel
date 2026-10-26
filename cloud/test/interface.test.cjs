@@ -18,5 +18,34 @@ test('login, importación privada, alta financiera, sincronización y cierre de 
  await authListener({uid:'cVO9GozjI7O98zuswrSWH2xpfa23'});await tick();assert(!w.document.body.classList.contains('cloud-locked'));assert(!w.document.querySelector('#cloud-initial').hidden);
  const result=await w.Cloud.import({size:1000,text:async()=>JSON.stringify(backup)});await tick();assert(w.document.querySelector('#cloud-initial').hidden);assert.equal(w.eval('state.entries.length'),backup.entries.length);assert.equal(w.eval('state.settings.logo'),backup.settings.logo);
  await w.Cloud.post('/api/entries',{kind:'expense',activity:'padel',date:'2026-10-26',concept:'Prueba nube',amount:1200,paymentMethod:'Efectivo'});await tick();assert(w.eval("state.entries.some(e=>e.concept==='Prueba nube')"));assert(w.document.querySelector('#cloud-status').textContent.match(/Sincronizado|Guardado/));
+ // Editar un cobro histórico conserva su detalle de productos si no se modifica.
+ await w.Cloud.post('/api/entries',{kind:'income',date:'2026-10-26',time:'18:00',client:'Cliente edición prueba',cash:40000,transfer:10000,products:5000,details:JSON.stringify({Agua:5000})});await tick();
+ const entryId=w.eval("state.entries.find(e=>e.client==='Cliente edición prueba').id");
+ w.document.querySelector('[data-view=income]').click();w.document.querySelector('[data-entry-edit="'+entryId+'"]').click();
+ let form=w.document.querySelector('#entry-form');assert.equal(form.elements.products.value,'5000');assert.equal(form.elements.cash.value,'40000');form.elements.cash.value='45000';
+ form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').amount'),55000);assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').details'),JSON.stringify({Agua:5000}));
+ // Agregar consumos y luego quitarlos actualiza tanto el total como el detalle.
+ w.document.querySelector('[data-entry-edit="'+entryId+'"]').click();form=w.document.querySelector('#entry-form');
+ w.document.querySelector('#consume-quantity').value='2';w.document.querySelector('#add-consumption').click();
+ const expectedProducts=w.eval('consumptions.reduce((sum,item)=>sum+item.quantity*item.price,0)');
+ form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').products'),expectedProducts);
+ w.document.querySelector('[data-entry-edit="'+entryId+'"]').click();w.document.querySelector('[data-remove]').click();form=w.document.querySelector('#entry-form');
+ form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').products'),0);assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').details'),'{}');
+ // Una edición abierta no pisa una modificación posterior.
+ w.document.querySelector('[data-entry-edit="'+entryId+'"]').click();
+ const beforeRemote=w.eval('JSON.stringify(state.entries.find(e=>e.id==='+entryId+'))');
+ await w.Cloud.post('/api/entries/update',{id:entryId,original:beforeRemote,cash:50000});await tick();
+ form=w.document.querySelector('#entry-form');form.elements.cash.value='60000';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert(w.document.querySelector('#form-error').textContent.includes('cambió'));assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').amount'),60000);form.closest('dialog').close();
+ // Cancelar la confirmación no borra; confirmar sí elimina el documento.
+ w.confirm=()=>false;w.document.querySelector('[data-entry-delete="'+entryId+'"]').click();await tick();assert(w.eval('state.entries.some(e=>e.id==='+entryId+')'));
+ w.confirm=()=>true;w.document.querySelector('[data-entry-delete="'+entryId+'"]').click();await tick();assert(!w.eval('state.entries.some(e=>e.id==='+entryId+')'));assert(![...mock.data.keys()].some(key=>key.endsWith('/entries-'+entryId)));
+ // Borrar un cobro vinculado no elimina la reserva.
+ const clientId=w.eval('state.clients[0].id');await w.Cloud.post('/api/bookings',{date:'2026-10-27',time:'18:00',clientId,duration:90,court:1});await tick();
+ const bookingId=w.eval("state.bookings.find(b=>b.date==='2026-10-27').id");
+ await w.Cloud.post('/api/entries',{kind:'income',date:'2026-10-27',client:'Reserva de prueba',cash:40000,bookingId});await tick();
+ const linked=w.eval('JSON.stringify(state.entries.find(e=>e.bookingId==='+bookingId+'))');
+ await w.Cloud.post('/api/entries/delete',{id:JSON.parse(linked).id,original:linked});await tick();assert(w.eval('state.bookings.some(b=>b.id==='+bookingId+')'));assert(!w.eval('state.entries.some(e=>e.bookingId==='+bookingId+')'));
  await authListener(null);await tick();assert(w.document.body.classList.contains('cloud-locked'));assert.equal(w.eval('state.entries.length'),0);assert.equal(w.document.querySelector('#content').textContent,'');assert.deepEqual(errors,[]);dom.window.close();
 });

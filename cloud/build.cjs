@@ -53,8 +53,10 @@ const gate=d.createElement('section');gate.id='cloud-gate';gate.innerHTML=`<div 
 const logo=d.querySelector('.brand img');if(logo){gate.querySelector('.cloud-login-card').prepend(logo.cloneNode(true))}
 d.body.classList.add('cloud-locked');d.body.prepend(gate);
 const main=d.querySelector('main');main.insertAdjacentHTML('afterbegin',`<div class="cloud-top"><span id="cloud-status" role="status">Iniciá sesión</span><div><button id="cloud-export" disabled>Exportar respaldo JSON</button> <button id="cloud-logout">Cerrar sesión</button></div></div><section id="cloud-initial" hidden><h2>Tu nube todavía está vacía</h2><p>Importá el respaldo JSON más reciente de tu app local. La importación incluye logo, movimientos, clientes, productos y reservas. No cargamos datos históricos sin que elijas el archivo.</p><button id="cloud-initialize-import" class="primary">Importar respaldo JSON</button><button id="cloud-initialize-empty">Empezar sin datos</button></section>`);
+const actionStyles=d.createElement('style');actionStyles.textContent='.entry-actions{display:flex;gap:7px}.entry-actions button{padding:8px 10px;font-size:11px}.danger-action{color:#ffb5a5;border-color:#824638}.danger-action:hover{background:#4b2722}input[readonly]{opacity:.7}';d.head.append(actionStyles);
 const app=d.createElement('script');app.src='/app.js';d.body.append(app);const cloud=d.createElement('script');cloud.type='module';cloud.src='/cloud.js';d.body.append(cloud);
 fs.mkdirSync(path.join(root,'public'),{recursive:true});fs.writeFileSync(path.join(root,'public','index.html'),'<!doctype html>\n'+d.documentElement.outerHTML.replace(/[ \t]+$/gm,''));
+script=require('./entry-patch.cjs')(script);
 fs.writeFileSync(path.join(root,'public','app.js'),script);
 fs.writeFileSync(path.join(root,'private','apply-operation.js'),operation);
 dom.window.close();console.log('Interfaz preparada sin datos financieros públicos. Respaldo separado en private/.');
