@@ -22,6 +22,8 @@ Las importaciones grandes se dividen en lotes de 400 documentos dentro de una ge
 
 Las pruebas de sincronización inyectan un SDK simulado y cubren concurrencia, importación parcial, dos clientes y cierre de sesión. La prueba de interfaz simula Authentication y Firestore, valida aislamiento público/privado e importa un respaldo en memoria (el privado local cuando existe, o un ejemplo sintético en un checkout limpio). No prueban conectividad, credenciales o reglas reales del proyecto: deben verificarse después de publicar e iniciar sesión. Las reglas conservan el alcance original solicitado; no agregan validación de esquema en servidor.
 
-## Editar y eliminar cobros
+## Editar y eliminar cobros y gastos
 
 Turnos y cobros incluye acciones por fila. Editar permite corregir fecha, hora, cliente, cobros, tarifa y consumos; conserva detalles históricos si no se modifican. Eliminar pide confirmación y quita el cobro del conjunto activo, sin borrar la reserva vinculada. Las transacciones sincronizan los cambios y comprueban tanto la revisión compartida como la copia del registro que abrió el usuario, para evitar ediciones atrasadas. La eliminación no ofrece deshacer: conservar respaldos JSON. La actualización de Hosting no modifica ni reimporta los datos de Firestore.
+
+El registro de gastos de Pádel también permite editar fecha, concepto, categoría, importe y método de pago, y eliminar con confirmación. Los métodos no informados del histórico permanecen sin especificar al abrir el editor; no se asigna Mercado Pago por defecto. Se conservan los detalles originales de la importación.

@@ -134,7 +134,7 @@ const total=(rows,key)=>rows.reduce((s,r)=>s+Number(r[key]||0),0);
 async function load(initial=false){if(window.Cloud)return window.Cloud.load(initial)}
 function selected(){const v=$('#month').value;if(!v)return state.entries;const mode=$('#period').value;if(mode==='month')return state.entries.filter(r=>r.date.startsWith(v));if(mode==='day')return state.entries.filter(r=>!r.monthlyIncome&&r.date===v);const d=new Date(v+'T12:00:00');const weekday=(d.getDay()+6)%7;d.setDate(d.getDate()-weekday);const start=d.toISOString().slice(0,10);d.setDate(d.getDate()+6);const end=d.toISOString().slice(0,10);return state.entries.filter(r=>!r.monthlyIncome&&r.date>=start&&r.date<=end)}
 function stat(label,value,note,featured=false){return `<article class="stat ${featured?'featured':''}"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`}
-function table(rows,kind){if(!rows.length)return '<div class="empty">No hay registros para este período.</div>';return `<div class="table-wrap"><table><thead><tr>${(kind==='income'?['Fecha','Hora','Cliente','Efectivo','Transferencia','Productos','Total','Acciones']:['Mes / fecha','Concepto','Categoría','Importe','Método de pago','Origen']).map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>kind==='income'?`<tr><td>${esc(r.date.split('-').reverse().join('/'))}</td><td>${esc(r.time)}</td><td>${esc(r.client)}</td><td class="money">${money(r.cash)}</td><td class="money">${money(r.transfer)}</td><td class="money" title="${esc(consumptionText(r))}">${money(r.products)}${consumptionText(r)?`<small style="display:block;max-width:240px;white-space:normal">${esc(consumptionText(r))}</small>`:''}</td><td class="money"><b>${money(r.amount)}</b></td><td><div class="entry-actions"><button type="button" data-entry-edit="${r.id}">Editar</button><button type="button" class="danger-action" data-entry-delete="${r.id}">Eliminar</button></div></td></tr>`:`<tr><td>${esc(r.date.split('-').reverse().join('/'))}</td><td>${esc(r.concept)}</td><td><span class="badge">${esc(r.category)}</span></td><td class="money">${money(r.amount)}</td><td>${esc(r.paymentMethod)||esc(originalMethod(r))||'Sin especificar'}</td><td>${esc(r.source)}</td></tr>`).join('')}</tbody></table></div>`}
+function table(rows,kind){if(!rows.length)return '<div class="empty">No hay registros para este período.</div>';return `<div class="table-wrap"><table><thead><tr>${(kind==='income'?['Fecha','Hora','Cliente','Efectivo','Transferencia','Productos','Total','Acciones']:['Mes / fecha','Concepto','Categoría','Importe','Método de pago','Origen','Acciones']).map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>kind==='income'?`<tr><td>${esc(r.date.split('-').reverse().join('/'))}</td><td>${esc(r.time)}</td><td>${esc(r.client)}</td><td class="money">${money(r.cash)}</td><td class="money">${money(r.transfer)}</td><td class="money" title="${esc(consumptionText(r))}">${money(r.products)}${consumptionText(r)?`<small style="display:block;max-width:240px;white-space:normal">${esc(consumptionText(r))}</small>`:''}</td><td class="money"><b>${money(r.amount)}</b></td><td><div class="entry-actions"><button type="button" data-entry-edit="${r.id}">Editar</button><button type="button" class="danger-action" data-entry-delete="${r.id}">Eliminar</button></div></td></tr>`:`<tr><td>${esc(r.date.split('-').reverse().join('/'))}</td><td>${esc(r.concept)}</td><td><span class="badge">${esc(r.category)}</span></td><td class="money">${money(r.amount)}</td><td>${esc(r.paymentMethod)||esc(originalMethod(r))||'Sin especificar'}</td><td>${esc(r.source)}</td><td><div class="entry-actions"><button type="button" data-entry-edit="${r.id}">Editar</button><button type="button" class="danger-action" data-entry-delete="${r.id}">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`}
 function render(){const rows=selected(),inc=rows.filter(r=>r.kind==='income'&&r.activity!=='gym'),exp=rows.filter(r=>r.kind==='expense'&&r.activity!=='gym'),income=total(inc,'amount'),expenses=total(exp,'amount'),products=total(inc,'products');$('#title').textContent={dashboard:'RESUMEN DEL NEGOCIO',income:'Turnos y cobros',expense:'Gastos del club',products:'Lista de productos',clients:'Clientes',bookings:'Registro de turnos',gym:'Avenida Gym'}[view];$('#new').textContent=view==='gym'?'+ Movimiento Gym':view==='bookings'?'+ Reservar turno':view==='expense'?'+ Registrar gasto':'+ Registrar turno';$('#month').parentElement.classList.toggle('hidden',['products','clients','bookings'].includes(view));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
 $('#period').parentElement.classList.toggle('hidden',['products','clients','bookings'].includes(view));$('#new').classList.remove('hidden');
 if(view==='bookings'){renderBookings();return}
@@ -183,14 +183,14 @@ function applyCloudOperation(base,url,data){
  }else throw Error('Operación desconocida');
  return next;
 }
-// EDICION_COBROS_V1
-function editableIncome(entry){return entry&&entry.kind==='income'&&(entry.activity||'padel')==='padel'}
+// EDICION_MOVIMIENTOS_V2
+function editableEntry(entry){return entry&&['income','expense'].includes(entry.kind)&&(entry.activity||'padel')==='padel'}
 function updateIncomeOperation(next,url,input){
  const index=next.entries.findIndex(e=>e.id===Number(input.id));
- if(index<0)throw Error('Este turno ya no existe. Revisá la lista actualizada.');
+ if(index<0)throw Error('Este registro ya no existe. Revisá la lista actualizada.');
  const previous=next.entries[index];
- if(!editableIncome(previous))throw Error('Esta acción solo se aplica a Turnos y cobros de Pádel.');
- if(!input.original||JSON.stringify(previous)!==input.original)throw Error('Este turno cambió desde que lo abriste. Cerrá la ventana y volvé a editarlo para no sobrescribir otro cambio.');
+ if(!editableEntry(previous))throw Error('Esta acción solo se aplica a cobros y gastos de Pádel.');
+ if(!input.original||JSON.stringify(previous)!==input.original)throw Error('Este registro cambió desde que lo abriste. Cerrá la ventana y volvé a editarlo para no sobrescribir otro cambio.');
  if(url==='/api/entries/delete'){next.entries.splice(index,1);return next}
  const edited={...previous,...input,id:previous.id,kind:previous.kind,activity:previous.activity,source:previous.source,bookingId:previous.bookingId};
  if(input.resetProductDetails)edited.details='{}';
@@ -198,23 +198,28 @@ function updateIncomeOperation(next,url,input){
  return next;
 }
 function editIncome(id){
- const entry=state.entries.find(e=>e.id===Number(id));if(!editableIncome(entry))return;
- const snapshot=clone(entry);view='income';render();$('#new').click();
+ const entry=state.entries.find(e=>e.id===Number(id));if(!editableEntry(entry))return;
+ const snapshot=clone(entry),expense=snapshot.kind==='expense';view=expense?'expense':'income';render();$('#new').click();
  const form=$('#entry-form');form.dataset.entryId=snapshot.id;form.dataset.original=JSON.stringify(snapshot);
  form.dataset.bookingId=snapshot.bookingId||'';
- for(const key of ['date','time','client','cash','transfer','products','rate'])form.elements[key].value=snapshot[key]??'';
+ if(expense){
+  if(![...form.elements.category.options].some(o=>o.value===snapshot.category))form.elements.category.add(new Option(snapshot.category||'Sin categoría',snapshot.category||''));
+  if(!snapshot.paymentMethod){let option=form.elements.paymentMethod.querySelector('option[value=""]');if(!option){option=new Option('','');form.elements.paymentMethod.add(option)}option.textContent='Sin especificar'+(originalMethod(snapshot)?' · Original: '+originalMethod(snapshot):'')}
+ }
+ for(const key of ['date','time','client','cash','transfer','products','rate','concept','category','amount','paymentMethod'])form.elements[key].value=snapshot[key]??'';
  try{const details=JSON.parse(snapshot.details||'{}');consumptions=clone(details.items||[])}catch{consumptions=[]}
  if(consumptions.length)drawConsumptions();
  form.dataset.productsChanged='false';
- $('#form-title').textContent='Editar turno y cobro';form.querySelector('[type=submit]').textContent='Guardar cambios';
+ $('#form-title').textContent=expense?'Editar gasto':'Editar turno y cobro';form.querySelector('[type=submit]').textContent='Guardar cambios';
 }
 async function deleteIncome(id,button){
- const entry=state.entries.find(e=>e.id===Number(id));if(!editableIncome(entry))return;
+ const entry=state.entries.find(e=>e.id===Number(id));if(!editableEntry(entry))return;
  const original=JSON.stringify(entry);
+ const expense=entry.kind==='expense';
  const note=entry.bookingId?' La reserva del calendario se conserva y dejará de figurar como cobrada.':'';
- if(!confirm(`¿Eliminar el cobro de ${entry.client} del ${entry.date} ${entry.time||''} por ${money(entry.amount)}?\n\nSe descontará de los ingresos y se eliminará para todos los dispositivos.${note}\n\nEsta acción no se puede deshacer desde la aplicación.`))return;
+ if(!confirm(`¿Eliminar ${expense?'el gasto de '+entry.concept:'el cobro de '+entry.client} del ${entry.date} ${entry.time||''} por ${money(entry.amount)}?\n\nSe descontará de los ${expense?'egresos':'ingresos'} y se eliminará para todos los dispositivos.${note}\n\nEsta acción no se puede deshacer desde la aplicación.`))return;
  if(button)button.disabled=true;
- try{await post('/api/entries/delete',{id:entry.id,original});await load();$('#notice').textContent='Cobro eliminado de la nube. Los totales y los otros dispositivos se actualizaron.'}catch(error){$('#notice').textContent=error.message}finally{if(button)button.disabled=false}
+ try{await post('/api/entries/delete',{id:entry.id,original});await load();$('#notice').textContent=(expense?'Gasto':'Cobro')+' eliminado de la nube. Los totales y los otros dispositivos se actualizaron.'}catch(error){$('#notice').textContent=error.message}finally{if(button)button.disabled=false}
 }
 document.addEventListener('click',event=>{
  const edit=event.target.closest('[data-entry-edit]'),remove=event.target.closest('[data-entry-delete]');
