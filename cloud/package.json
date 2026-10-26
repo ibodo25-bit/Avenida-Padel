@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "esbuild": "0.25.11",
+    "firebase": "13.1.0"
+  },
+  "name": "avenida-padel-cloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.cjs && esbuild src/firebase-client.js --bundle --format=esm --target=es2020 --minify --outfile=public/cloud.js",
+    "test": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.3"
+  }
+}

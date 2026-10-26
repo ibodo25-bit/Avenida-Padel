@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /clubs/avenida-padel/{document=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == "cVO9GozjI7O98zuswrSWH2xpfa23";
+    }
+  }
+}

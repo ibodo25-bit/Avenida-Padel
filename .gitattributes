@@ -1,0 +1,2 @@
+# El bundle incluye cadenas del SDK con espacios intencionales.
+cloud/public/cloud.js -whitespace linguist-generated=true

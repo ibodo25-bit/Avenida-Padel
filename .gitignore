@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+/data/
+
+cloud/node_modules/
+cloud/private/
+cloud/.firebase/
+cloud/*-debug.log

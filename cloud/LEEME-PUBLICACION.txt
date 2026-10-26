@@ -1,0 +1,35 @@
+AVENIDA PADEL - VERSION FIREBASE
+
+Estado: aplicación preparada y probada con un servicio simulado. Todavía no publicada ni validada contra tu cuenta real.
+Proyecto: avenida-padel. Solo el UID autorizado en firestore.rules puede leer y modificar los datos.
+
+IMPORTANTE: para publicar se sube exclusivamente la carpeta public mediante Firebase Hosting. Los archivos de private/ son privados, no se suben a GitHub y NO deben publicarse ni copiarse a public. Preferí exportar un JSON actualizado desde tu HTML local antes de migrar.
+
+PUBLICACION GUIADA DESDE GITHUB SIN INSTALAR NADA EN LA PC
+1. Abrir Google Cloud Shell con tu misma cuenta: https://shell.cloud.google.com/?project=avenida-padel
+2. Ejecutar, cada comando por separado:
+   git clone https://github.com/ibodo25-bit/Avenida-Padel.git
+   cd Avenida-Padel/cloud
+   npx --yes firebase-tools@15.34.1 login --no-localhost
+   npx --yes firebase-tools@15.34.1 deploy --only hosting --project avenida-padel
+3. Seguir el inicio de sesión en tu navegador. Si el repositorio es privado, GitHub también puede pedir autenticación. No compartir contraseñas, códigos de autorización ni tokens en el chat.
+4. Usar el Hosting URL que devuelva el comando. Se publica public/; no cambia a Blaze ni despliega funciones de pago. No ejecutar firebase init.
+5. Iniciar sesión con el correo y contraseña que creaste en Authentication.
+6. Cuando indique que la nube está vacía, elegir Importar respaldo JSON y seleccionar el respaldo más reciente de tu app local. El repositorio no contiene tus datos financieros. El logo del respaldo también se importa.
+7. Verificar cantidades y totales antes de comenzar a usar la nube. Luego abrir el mismo enlace en otra PC/celular y entrar con la misma cuenta autorizada. Crear una reserva de prueba y comprobar que aparezca en ambos. No duplicar movimientos financieros reales como prueba.
+8. Conservar el HTML local y los JSON como respaldo. Desde la nube se puede seguir exportando JSON.
+
+LAS REGLAS
+Las reglas ya publicadas por el usuario deben coincidir con firestore.rules. No usar reglas abiertas ni modo prueba. No es necesario volver a desplegarlas para publicar Hosting.
+
+GUARDADO Y SINCRONIZACION
+- Se requiere conexión y confirmación de Firebase. Un error no se presenta como guardado.
+- Las modificaciones se guardan por registro y se reciben con una suscripción en tiempo real.
+- Una transacción comprueba la revisión compartida. Si otro dispositivo guardó antes, se rechaza la copia atrasada para evitar sobrescribirlo. Revisar y reintentar conserva los datos.
+- Importar JSON reemplaza el conjunto completo para todos los dispositivos, con confirmación previa. Se sube a una generación privada y se activa solo al terminar. Una falla no reemplaza los datos activos.
+- Los conjuntos de importaciones anteriores o fallidas se retienen en Firestore; no son la fuente activa. Evitar importaciones repetidas y revisar su limpieza antes de acumular muchos respaldos. El respaldo principal recuperable sigue siendo el JSON descargado.
+- El navegador recuerda la sesión durante la sesión de navegación. Cerrar sesión al terminar en una PC compartida.
+- El proyecto debe permanecer en Spark. Si la consola exige activar facturación, detenerse y revisar. Las cuotas y condiciones del proveedor siguen aplicando; no se promete disponibilidad ilimitada.
+
+NO CONFUNDIR LAS VERSIONES
+public/index.html se abre mediante Hosting HTTPS, no con doble clic en el Explorador: usa módulos y Firebase. La versión HTML local anterior sigue funcionando por separado, pero ya no debe usarse para cargar movimientos diarios después de la migración porque no se sincroniza con Firebase.
