@@ -57,6 +57,7 @@ const actionStyles=d.createElement('style');actionStyles.textContent='.entry-act
 const app=d.createElement('script');app.src='/app.js';d.body.append(app);const cloud=d.createElement('script');cloud.type='module';cloud.src='/cloud.js';d.body.append(cloud);
 fs.mkdirSync(path.join(root,'public'),{recursive:true});fs.writeFileSync(path.join(root,'public','index.html'),'<!doctype html>\n'+d.documentElement.outerHTML.replace(/[ \t]+$/gm,''));
 script=require('./entry-patch.cjs')(script);
+script=require('./consumption-patch.cjs')(script);
 fs.writeFileSync(path.join(root,'public','app.js'),script);
 fs.writeFileSync(path.join(root,'private','apply-operation.js'),operation);
 dom.window.close();console.log('Interfaz preparada sin datos financieros públicos. Respaldo separado en private/.');

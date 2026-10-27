@@ -29,6 +29,10 @@ test('login, importación privada, alta financiera, sincronización y cierre de 
  w.document.querySelector('[data-entry-edit="'+expenseId+'"]').click();const expenseOriginal=w.eval('JSON.stringify(state.entries.find(e=>e.id==='+expenseId+'))');await w.Cloud.post('/api/entries/update',{id:expenseId,original:expenseOriginal,amount:3500});await tick();expenseForm.elements.amount.value='4000';expenseForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert(w.document.querySelector('#form-error').textContent.includes('cambió'));assert.equal(w.eval('state.entries.find(e=>e.id==='+expenseId+').amount'),3500);expenseForm.closest('dialog').close();
  w.confirm=()=>false;w.document.querySelector('[data-entry-delete="'+expenseId+'"]').click();await tick();assert(w.eval('state.entries.some(e=>e.id==='+expenseId+')'));
  w.confirm=()=>true;w.document.querySelector('[data-entry-delete="'+expenseId+'"]').click();await tick();assert(!w.eval('state.entries.some(e=>e.id==='+expenseId+')'));assert(![...mock.data.keys()].some(k=>k.endsWith('/entries-'+expenseId)));
+ // Un turno sin consumos no muestra un producto elegido ni agrega importes.
+ w.document.querySelector('[data-view=income]').click();w.document.querySelector('#new').click();
+ const noConsumptionForm=w.document.querySelector('#entry-form');assert.equal(w.document.querySelector('#consume-product').value,'');assert(w.document.querySelector('#add-consumption').disabled);w.document.querySelector('#add-consumption').click();assert.equal(w.eval('consumptions.length'),0);
+ noConsumptionForm.elements.client.value='Turno sin consumo';noConsumptionForm.elements.date.value='2026-10-26';noConsumptionForm.elements.cash.value='40000';noConsumptionForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert.equal(w.eval("state.entries.find(e=>e.client==='Turno sin consumo').products"),0);assert.equal(w.eval("state.entries.find(e=>e.client==='Turno sin consumo').amount"),40000);
  // Editar un cobro histórico conserva su detalle de productos si no se modifica.
  await w.Cloud.post('/api/entries',{kind:'income',date:'2026-10-26',time:'18:00',client:'Cliente edición prueba',cash:40000,transfer:10000,products:5000,details:JSON.stringify({Agua:5000})});await tick();
  const entryId=w.eval("state.entries.find(e=>e.client==='Cliente edición prueba').id");
@@ -38,7 +42,10 @@ test('login, importación privada, alta financiera, sincronización y cierre de 
  assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').amount'),55000);assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').details'),JSON.stringify({Agua:5000}));
  // Agregar consumos y luego quitarlos actualiza tanto el total como el detalle.
  w.document.querySelector('[data-entry-edit="'+entryId+'"]').click();form=w.document.querySelector('#entry-form');
+ assert.equal(w.document.querySelector('#consume-product').value,'');assert(w.document.querySelector('#add-consumption').disabled);
+ w.document.querySelector('#consume-product').selectedIndex=1;w.document.querySelector('#consume-product').dispatchEvent(new w.Event('change'));assert(!w.document.querySelector('#add-consumption').disabled);
  w.document.querySelector('#consume-quantity').value='2';w.document.querySelector('#add-consumption').click();
+ assert.equal(w.document.querySelector('#consume-product').value,'');assert(w.document.querySelector('#add-consumption').disabled);
  const expectedProducts=w.eval('consumptions.reduce((sum,item)=>sum+item.quantity*item.price,0)');
  form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert.equal(w.eval('state.entries.find(e=>e.id==='+entryId+').products'),expectedProducts);
  w.document.querySelector('[data-entry-edit="'+entryId+'"]').click();w.document.querySelector('[data-remove]').click();form=w.document.querySelector('#entry-form');
