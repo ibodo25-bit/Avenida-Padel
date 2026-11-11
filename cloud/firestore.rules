@@ -1,9 +1,101 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /clubs/avenida-padel/{document=**} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == "cVO9GozjI7O98zuswrSWH2xpfa23";
+    function admin() {
+      return request.auth != null && request.auth.uid == "cVO9GozjI7O98zuswrSWH2xpfa23";
+    }
+    function staff() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/clubs/avenida-padel/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/clubs/avenida-padel/members/$(request.auth.uid)).data.role == 'staff'
+        && get(/databases/$(database)/documents/clubs/avenida-padel/members/$(request.auth.uid)).data.enabled == true;
+    }
+    function active(generation) {
+      let head = get(/databases/$(database)/documents/clubs/avenida-padel/control/current).data;
+      return head.generation == generation && head.accessSchemaVersion == 2;
+    }
+    function validIds(ids) {
+      return ids.keys().hasOnly(['entries','clients','products','bookings'])
+        && ids.entries is int && ids.entries > 0 && ids.clients is int && ids.clients > 0
+        && ids.products is int && ids.products > 0 && ids.bookings is int && ids.bookings > 0;
+    }
+    function staffRecord(d) {
+      let v = d.value;
+      return d.keys().hasOnly(['kind','value','scope']) && d.scope == 'staff'
+        && v.id is int && v.id > 0
+        && ((d.kind == 'entries' && v.keys().hasOnly(['id','kind','activity','monthlyIncome','bookingId','quantity','unitPrice','date','time','client','concept','category','source','paymentMethod','rate','details','cash','transfer','products','amount']) && v.activity == 'padel' && v.kind in ['income','expense']
+          && v.monthlyIncome == false && v.amount is number && v.amount >= 0
+          && v.cash is number && v.cash >= 0 && v.transfer is number && v.transfer >= 0
+          && v.products is number && v.products >= 0 && v.products <= v.amount)
+        || (d.kind == 'clients' && v.keys().hasOnly(['id','name']) && v.name is string && v.name.size() > 0 && v.name.size() <= 500)
+        || (d.kind == 'products' && v.keys().hasOnly(['id','name','price']) && v.name is string && v.name.size() > 0 && v.name.size() <= 500 && v.price is number && v.price >= 0));
+    }
+    function validRecord(id, d) {
+      return id == d.kind + '-' + string(d.value.id)
+        && (staffRecord(d) || (d.scope == 'admin' && d.keys().hasOnly(['kind','value','scope'])
+          && ((d.kind == 'entries' && d.value.activity == 'gym') || d.kind == 'bookings')));
+    }
+    function validMeta(d) {
+      return d.keys().hasOnly(['revision','settings','nextIds','scope','accessSchemaVersion','updatedAt'])
+        && d.revision is int && d.revision >= 0 && d.scope == 'staff' && d.accessSchemaVersion == 2
+        && validIds(d.nextIds)
+        && d.settings.keys().hasOnly(['logo','startMonth','gymHistoryImported']);
+    }
+    function metaBefore(generation) {
+      return get(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/_meta).data;
+    }
+    function metaAfter(generation) {
+      return getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/_meta).data;
+    }
+    function validCounter(kind, old, newer, generation) {
+      return newer == old || (newer == old + 1
+        && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$(kind + '-' + string(old))).data.kind == kind
+        && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$(kind + '-' + string(old))).data.scope == 'staff');
+    }
+    function staffMetaUpdate(generation) {
+      let old = resource.data;
+      let newer = request.resource.data;
+      return validMeta(newer)
+        && newer.diff(old).affectedKeys().hasOnly(['revision','updatedAt','nextIds'])
+        && newer.revision == old.revision + 1 && newer.updatedAt == request.time
+        && newer.nextIds.bookings == old.nextIds.bookings
+        && validCounter('entries',old.nextIds.entries,newer.nextIds.entries,generation)
+        && validCounter('clients',old.nextIds.clients,newer.nextIds.clients,generation)
+        && validCounter('products',old.nextIds.products,newer.nextIds.products,generation);
+    }
+    match /clubs/avenida-padel/members/{uid} {
+      allow get: if admin() || (request.auth != null && request.auth.uid == uid);
+      allow list: if admin();
+      allow create, update: if admin() && uid != request.auth.uid
+        && request.resource.data.keys().hasOnly(['role','enabled','displayName','email','updatedAt'])
+        && request.resource.data.role == 'staff' && request.resource.data.enabled is bool
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 100
+        && request.resource.data.email is string && request.resource.data.email.size() <= 254;
+      allow delete: if admin();
+    }
+    match /clubs/avenida-padel/control/current {
+      allow read: if admin() || staff();
+      allow create, update: if admin() && request.resource.data.accessSchemaVersion == 2;
+      allow delete: if admin();
+    }
+    match /clubs/avenida-padel/datasets/{generation}/records/{id} {
+      // scope es un atributo de acceso validado en todas las escrituras, también las del administrador.
+      // El empleado DEBE consultar con where('scope', '==', 'staff'); no puede descargar la colección completa.
+      allow read: if admin() || (staff() && active(generation) && resource.data.scope == 'staff');
+      allow create: if (admin() && (id == '_meta' ? validMeta(request.resource.data) : validRecord(id,request.resource.data)))
+        || (staff() && active(generation) && id != '_meta' && staffRecord(request.resource.data)
+          && validRecord(id,request.resource.data)
+          && (request.resource.data.kind != 'entries' || request.resource.data.value.bookingId == null)
+          && request.resource.data.value.id == metaBefore(generation).nextIds[request.resource.data.kind]
+          && metaAfter(generation).nextIds[request.resource.data.kind] == request.resource.data.value.id + 1
+          && metaAfter(generation).revision == metaBefore(generation).revision + 1);
+      allow update: if (admin() && (id == '_meta' ? validMeta(request.resource.data) : validRecord(id,request.resource.data)))
+        || (staff() && active(generation) && (id == '_meta' ? staffMetaUpdate(generation)
+          : (resource.data.scope == 'staff' && staffRecord(request.resource.data) && validRecord(id,request.resource.data)
+            && request.resource.data.kind == resource.data.kind
+            && (request.resource.data.kind != 'entries' || request.resource.data.value.diff(resource.data.value).affectedKeys().hasOnly(['date','time','client','cash','transfer','products','amount','rate','details','concept','category','paymentMethod']))
+            && metaAfter(generation).revision == metaBefore(generation).revision + 1)));
+      allow delete: if admin();
     }
   }
 }

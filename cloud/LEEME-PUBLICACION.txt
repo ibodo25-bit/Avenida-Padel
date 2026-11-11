@@ -33,3 +33,7 @@ GUARDADO Y SINCRONIZACION
 
 NO CONFUNDIR LAS VERSIONES
 public/index.html se abre mediante Hosting HTTPS, no con doble clic en el Explorador: usa módulos y Firebase. La versión HTML local anterior sigue funcionando por separado, pero ya no debe usarse para cargar movimientos diarios después de la migración porque no se sincroniza con Firebase.
+
+
+ACCESO DE EMPLEADOS (actualización)
+Para activar esta función, primero ejecutar la suite de reglas del emulador según README.md. Después publicar hosting Y reglas, no solamente Hosting, y recargar la app del propietario. Crear la cuenta de empleado en Authentication y autorizar su UID desde Accesos. La aplicación prepara el conjunto actual con permisos por registro antes de habilitar empleados; conserva todos los importes y el logo. No hay que importar nuevamente un respaldo para activar permisos. El empleado no puede eliminar registros. Las cuentas comparten los mismos datos de Pádel, con vistas diferentes según el rol.

@@ -75,7 +75,7 @@ function saveBookings(next,data){
  const dates=[text(data.date)];if(!validDay(dates[0]))throw Error('Fecha inválida');
  if(data.repeat==='weekly'&&!id){if(!validDay(data.until)||data.until<dates[0]||data.until>addDays(dates[0],366))throw Error('Elegí un fin de repetición dentro del próximo año');for(let d=addDays(dates[0],7);d<=data.until;d=addDays(d,7))dates.push(d)}
  const seriesId=dates.length>1?'serie-'+Date.now()+'-'+Math.random().toString(36).slice(2):existing?.seriesId||'';
- const maxId=Math.max(0,...next.bookings.map(b=>b.id));
+ const maxId=data._allocatedId?data._allocatedId-1:Math.max(0,...next.bookings.map(b=>b.id));
  const additions=validateBookings(dates.map((date,i)=>({id:id||maxId+i+1,date,time:data.time,duration:Number(data.duration),court:Number(data.court),clientId:client.id,clientName:client.name,status:existing?.status||'reserved',origin:data.origin||'Manual',seriesId})));
  for(const a of additions){if(next.bookings.some(b=>b.id!==id&&b.status!=='cancelled'&&b.date===a.date&&b.court===a.court&&minutes(a.time)<minutes(b.time)+b.duration&&minutes(b.time)<minutes(a.time)+a.duration))throw Error('Hay un turno superpuesto el '+a.date+' en cancha '+a.court+'. No se guardó ninguna reserva.')}
  if(id)next.bookings=next.bookings.filter(b=>b.id!==id);next.bookings.push(...additions);
@@ -169,7 +169,7 @@ function applyCloudOperation(base,url,data){
  if(['/api/entries/update','/api/entries/delete'].includes(url))return updateIncomeOperation(next,url,data);
  if(url==='/api/entries'){
   if(data.bookingId&&next.entries.some(r=>r.bookingId===Number(data.bookingId)))throw Error('Esta reserva ya tiene un cobro registrado');
-  next.entries.push(normalizeEntry({...data,id:Math.max(0,...next.entries.map(r=>r.id))+1,source:'Manual'}));
+  next.entries.push(normalizeEntry({...data,id:(data._allocatedId||Math.max(0,...next.entries.map(r=>r.id))+1),source:'Manual'}));
  }else if(url==='/api/bookings'){saveBookings(next,data);
  }else if(url==='/api/bookings/status'){const b=next.bookings.find(b=>b.id===Number(data.id));if(!b)throw Error('Reserva no encontrada');if(!['played','cancelled'].includes(data.status))throw Error('Estado inválido');for(const target of next.bookings.filter(x=>x.id===b.id||(data.series&&b.seriesId&&x.seriesId===b.seriesId&&x.date>=b.date)))target.status=data.status;
  }else if(['/api/products','/api/clients'].includes(url)){
@@ -179,7 +179,7 @@ function applyCloudOperation(base,url,data){
   if(data.id&&!existing)throw Error('No se encontró el registro');
   if(next[key].some(p=>p!==existing&&p.name.toLocaleLowerCase()===name.toLocaleLowerCase()))throw Error('Ya existe ese nombre');
   const fields=key==='clients'?{name}:{name,price};
-  if(existing){Object.assign(existing,fields);if(key==='clients')delete existing.price}else next[key].push({id:Math.max(0,...next[key].map(p=>p.id))+1,...fields});
+  if(existing){Object.assign(existing,fields);if(key==='clients')delete existing.price}else next[key].push({id:(data._allocatedId||Math.max(0,...next[key].map(p=>p.id))+1),...fields});
  }else throw Error('Operación desconocida');
  return next;
 }
@@ -229,3 +229,14 @@ document.addEventListener('click',event=>{
 $('#entry-form').elements.products.addEventListener('input',()=>{$('#entry-form').dataset.productsChanged='true'});
 
 // PRODUCTO_SIN_CONSUMO_V1
+
+// ACCESO_EMPLEADOS_V1
+const renderWithoutAccess=render;
+render=function(){
+ if(window.Cloud?.role==='staff'&&!['income','expense','products','clients'].includes(view))view='income';
+ if(view==='access'&&window.Cloud?.role==='admin'){window.Cloud.renderAccess();return}
+ renderWithoutAccess();window.Cloud?.applyPermissions();
+};
+const exportBackupWithoutAccess=exportBackup,exportCSVWithoutAccess=exportCSV;
+exportBackup=function(){if(window.Cloud?.role!=='admin'){$('#notice').textContent='Los respaldos están disponibles solo para el administrador.';return}exportBackupWithoutAccess()};
+exportCSV=function(){if(window.Cloud?.role!=='admin'){$('#notice').textContent='La exportación está disponible solo para el administrador.';return}exportCSVWithoutAccess()};

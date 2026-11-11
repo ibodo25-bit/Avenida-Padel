@@ -51,6 +51,7 @@ const extra=d.createElement('style');extra.textContent=`
 d.head.append(extra);d.title='Avenida Pádel · Gestión en la nube';
 const gate=d.createElement('section');gate.id='cloud-gate';gate.innerHTML=`<div class="cloud-login-card"><h1>AVENIDA PÁDEL</h1><p>Iniciá sesión para acceder a los turnos y las finanzas del club.</p><form id="cloud-login"><label>Correo electrónico<input id="cloud-email" type="email" autocomplete="username" required></label><label>Contraseña<input id="cloud-password" type="password" autocomplete="current-password" required></label><p id="cloud-auth-error" role="alert"></p><button id="cloud-login-button" type="submit">Ingresar</button></form><p>Solo usuarios autorizados. No necesitás ingresar datos de pago.</p></div>`;
 const logo=d.querySelector('.brand img');if(logo){gate.querySelector('.cloud-login-card').prepend(logo.cloneNode(true))}
+const accessButton=d.createElement('button');accessButton.dataset.view='access';accessButton.textContent='♧  Accesos';d.querySelector('nav').append(accessButton);
 d.body.classList.add('cloud-locked');d.body.prepend(gate);
 const main=d.querySelector('main');main.insertAdjacentHTML('afterbegin',`<div class="cloud-top"><span id="cloud-status" role="status">Iniciá sesión</span><div><button id="cloud-export" disabled>Exportar respaldo JSON</button> <button id="cloud-logout">Cerrar sesión</button></div></div><section id="cloud-initial" hidden><h2>Tu nube todavía está vacía</h2><p>Importá el respaldo JSON más reciente de tu app local. La importación incluye logo, movimientos, clientes, productos y reservas. No cargamos datos históricos sin que elijas el archivo.</p><button id="cloud-initialize-import" class="primary">Importar respaldo JSON</button><button id="cloud-initialize-empty">Empezar sin datos</button></section>`);
 const actionStyles=d.createElement('style');actionStyles.textContent='.entry-actions{display:flex;gap:7px}.entry-actions button{padding:8px 10px;font-size:11px}.danger-action{color:#ffb5a5;border-color:#824638}.danger-action:hover{background:#4b2722}input[readonly]{opacity:.7}';d.head.append(actionStyles);
@@ -58,6 +59,7 @@ const app=d.createElement('script');app.src='/app.js';d.body.append(app);const c
 fs.mkdirSync(path.join(root,'public'),{recursive:true});fs.writeFileSync(path.join(root,'public','index.html'),'<!doctype html>\n'+d.documentElement.outerHTML.replace(/[ \t]+$/gm,''));
 script=require('./entry-patch.cjs')(script);
 script=require('./consumption-patch.cjs')(script);
+script=require('./access-patch.cjs')(script);
 fs.writeFileSync(path.join(root,'public','app.js'),script);
 fs.writeFileSync(path.join(root,'private','apply-operation.js'),operation);
 dom.window.close();console.log('Interfaz preparada sin datos financieros públicos. Respaldo separado en private/.');

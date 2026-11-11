@@ -8,11 +8,11 @@ test('los archivos públicos no contienen el historial, ni scripts del entorno d
  const normalized=dom.window.document.querySelector('.brand img').src;assert(normalized.startsWith('data:image/'));dom.window.close();
 });
 test('login, importación privada, alta financiera, sincronización y cierre de sesión',async()=>{
- const {createSyncEngine,emptyState}=await import('../src/sync-engine.js');let errors=[],authListener=null;const mock=mockFirestore(),vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
+ const {createSyncEngine,emptyState}=await import('../src/sync-engine.js');const {STAFF_VIEWS}=await import('../src/access-model.js');let errors=[],authListener=null;const mock=mockFirestore(),vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
  const inline=html.replace('<script src="/app.js"></script>',()=>'<script>'+app.replace(/<\/script/gi,'<\\/script')+'</script>').replace('<script type="module" src="/cloud.js"></script>','');
  const dom=new JSDOM(inline,{runScripts:'dangerously',url:'https://avenida-padel.web.app',virtualConsole:vc,beforeParse(w){w.confirm=()=>true;w.structuredClone=structuredClone;w.HTMLDialogElement.prototype.close=function(){this.open=false};w.HTMLDialogElement.prototype.showModal=function(){this.open=true}}});
- const w=dom.window;Object.assign(w,{initializeApp:()=>({}),getAuth:()=>({}),getFirestore:()=>({}),setPersistence:async()=>{},browserSessionPersistence:{},onAuthStateChanged:(a,fn)=>{authListener=fn;fn(null)},signInWithEmailAndPassword:async()=>authListener({uid:'cVO9GozjI7O98zuswrSWH2xpfa23'}),signOut:async()=>authListener(null),createSyncEngine,emptyState,...mock.sdk});
- let client=fs.readFileSync(path.join(base,'src/firebase-client.js'),'utf8').replace(/^import .*;\n/gm,'');
+ const w=dom.window;Object.assign(w,{initializeApp:()=>({}),getAuth:()=>({}),getFirestore:()=>({}),setPersistence:async()=>{},browserSessionPersistence:{},onAuthStateChanged:(a,fn)=>{authListener=fn;fn(null)},signInWithEmailAndPassword:async()=>authListener({uid:'cVO9GozjI7O98zuswrSWH2xpfa23'}),signOut:async()=>authListener(null),createSyncEngine,emptyState,STAFF_VIEWS,...mock.sdk});
+ let client=fs.readFileSync(path.join(base,'src/firebase-client.js'),'utf8').replace(/^import .*;\n/gm,'').replace('location.reload();return;','window.__reloadRequests=(window.__reloadRequests||0)+1;');
  await w.eval('(async()=>{'+client+'})()');await tick();assert(w.document.body.classList.contains('cloud-locked'));
  await authListener({uid:'not-authorized'});await tick();assert(w.document.body.classList.contains('cloud-locked'));assert(w.document.querySelector('#cloud-auth-error').textContent.includes('no está autorizado'));
  await authListener({uid:'cVO9GozjI7O98zuswrSWH2xpfa23'});await tick();assert(!w.document.body.classList.contains('cloud-locked'));assert(!w.document.querySelector('#cloud-initial').hidden);
@@ -65,5 +65,17 @@ test('login, importación privada, alta financiera, sincronización y cierre de 
  await w.Cloud.post('/api/entries',{kind:'income',date:'2026-10-27',client:'Reserva de prueba',cash:40000,bookingId});await tick();
  const linked=w.eval('JSON.stringify(state.entries.find(e=>e.bookingId==='+bookingId+'))');
  await w.Cloud.post('/api/entries/delete',{id:JSON.parse(linked).id,original:linked});await tick();assert(w.eval('state.bookings.some(b=>b.id==='+bookingId+')'));assert(!w.eval('state.entries.some(e=>e.bookingId==='+bookingId+')'));
- await authListener(null);await tick();assert(w.document.body.classList.contains('cloud-locked'));assert.equal(w.eval('state.entries.length'),0);assert.equal(w.document.querySelector('#content').textContent,'');assert.deepEqual(errors,[]);dom.window.close();
+ // El propietario autoriza una cuenta desde Accesos; el empleado no recibe datos de Gym.
+ w.document.querySelector('[data-view=access]').click();let accessForm=w.document.querySelector('#access-form');accessForm.elements.uid.value='employee-id';accessForm.elements.displayName.value='Operador de prueba';accessForm.elements.email.value='employee@example.test';accessForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick();assert.equal(mock.data.get('clubs/avenida-padel/members/employee-id').role,'staff');
+ const gymBefore=w.eval("JSON.stringify(state.entries.filter(e=>e.activity==='gym'))");
+ await authListener({uid:'employee-id'});await tick();assert.equal(w.Cloud.role,'staff');assert.equal(w.eval('view'),'income');assert.equal(w.eval("state.entries.filter(e=>e.activity==='gym').length"),0);assert.equal(w.eval('state.bookings.length'),0);
+ for(const name of ['dashboard','gym','bookings','access'])assert(w.document.querySelector('[data-view='+name+']').classList.contains('hidden'));
+ for(const name of ['income','expense','products','clients'])assert(!w.document.querySelector('[data-view='+name+']').classList.contains('hidden'));
+ assert(w.document.querySelector('#import-backup').classList.contains('hidden'));assert(w.document.querySelector('[data-entry-delete]').classList.contains('hidden'));
+ await assert.rejects(w.Cloud.post('/api/entries/delete',{id:1}),/administrador/);await assert.rejects(w.Cloud.post('/api/entries',{kind:'income',activity:'gym',client:'Prohibido',cash:1}),/administrador/);
+ await w.Cloud.post('/api/entries',{kind:'income',date:'2026-10-28',client:'Cobro empleado',cash:40000});await tick();assert(w.eval("state.entries.some(e=>e.client==='Cobro empleado')"));
+ await w.Cloud.post('/api/clients',{name:'Cliente empleado'});await w.Cloud.post('/api/products',{name:'Producto empleado',price:2000});await tick();assert(w.eval("state.clients.some(e=>e.name==='Cliente empleado')"));
+ await authListener({uid:'cVO9GozjI7O98zuswrSWH2xpfa23'});await tick();assert.equal(w.eval("JSON.stringify(state.entries.filter(e=>e.activity==='gym'))"),gymBefore);assert(w.eval("state.entries.some(e=>e.client==='Cobro empleado')"));assert(!w.document.querySelector('[data-view=gym]').classList.contains('hidden'));
+ await authListener({uid:'employee-id'});await tick();await mock.sdk.setDoc('clubs/avenida-padel/members/employee-id',{role:'staff',enabled:false});await tick();assert(w.document.body.classList.contains('cloud-locked'));assert.equal(w.eval('state.entries.length'),0);
+ await authListener(null);await tick();assert(w.document.body.classList.contains('cloud-locked'));assert.equal(w.eval('state.entries.length'),0);assert.equal(w.document.querySelector('#content').textContent,'');assert(w.__reloadRequests>=1);assert.deepEqual(errors,[]);dom.window.close();
 });
