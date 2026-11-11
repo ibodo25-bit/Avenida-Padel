@@ -12,7 +12,7 @@ test('sesión cerrada rechaza nuevas escrituras',async()=>{const {engine}=await 
 test('empleado recibe solo Pádel, no puede importar/borrar ni tocar configuración; IDs no pisan Gym',async()=>{
  const {mod,db,engine}=await setup();const initial=sample(mod);initial.entries.push({id:500,activity:'gym',amount:999});initial.bookings.push({id:1,clientId:1});await engine.replace(initial);await tick();
  const received=[];const staff=mod.createSyncEngine({sdk:db.sdk,db:{},role:'staff',normalize:structuredClone,applyOperation:(data,url,input)=>{data.entries.push({id:input._allocatedId,activity:'padel',amount:input.amount});return data},events:{data:d=>received.push(d)}});staff.start();await tick();
- assert.equal(staff.current.entries.length,1);assert.equal(staff.current.bookings.length,0);
+ assert.equal(staff.current.entries.length,1);assert.equal(staff.current.bookings.length,1);
  await assert.rejects(staff.replace(initial),/administrador/);await assert.rejects(staff.post('/api/entries/delete',{id:1}),/administrador/);await assert.rejects(staff.post('/api/entries',{activity:'gym'}),/administrador/);
  await assert.rejects(staff.change(d=>{d.settings.logo='modificado';return d}),/empleado/);
  await staff.post('/api/entries',{amount:50});await tick();assert.equal(staff.current.entries.at(-1).id,501);assert.equal(engine.current.entries.find(e=>e.id===500).activity,'gym');assert.equal(engine.current.entries.length,3);staff.close();engine.close();

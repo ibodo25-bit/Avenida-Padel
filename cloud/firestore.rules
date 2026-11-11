@@ -30,10 +30,26 @@ service cloud.firestore {
         || (d.kind == 'clients' && v.keys().hasOnly(['id','name']) && v.name is string && v.name.size() > 0 && v.name.size() <= 500)
         || (d.kind == 'products' && v.keys().hasOnly(['id','name','price']) && v.name is string && v.name.size() > 0 && v.name.size() <= 500 && v.price is number && v.price >= 0));
     }
+    function staffBooking(d) {
+      let v = d.value;
+      return d.keys().hasOnly(['kind','value','scope']) && d.kind == 'bookings' && d.scope == 'admin'
+        && v.keys().hasOnly(['id','date','time','clientId','clientName','duration','court','status','origin','seriesId'])
+        && v.id is int && v.id > 0 && v.clientId is int && v.clientId > 0
+        && v.date is string && v.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && v.time is string && v.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+        && v.clientName is string && v.clientName.size() > 0 && v.clientName.size() <= 500
+        && v.duration is int && v.duration >= 15 && v.duration <= 480
+        && v.court is int && v.court >= 1 && v.court <= 50
+        && v.status in ['reserved','played','cancelled'] && v.origin is string && v.origin.size() <= 500
+        && v.seriesId is string && v.seriesId.size() <= 500;
+    }
+    function operable(d) {
+      return staffRecord(d) || staffBooking(d);
+    }
     function validRecord(id, d) {
       return id == d.kind + '-' + string(d.value.id)
-        && (staffRecord(d) || (d.scope == 'admin' && d.keys().hasOnly(['kind','value','scope'])
-          && ((d.kind == 'entries' && d.value.activity == 'gym') || d.kind == 'bookings')));
+        && (operable(d) || (d.scope == 'admin' && d.keys().hasOnly(['kind','value','scope'])
+          && (d.kind == 'entries' && d.value.activity == 'gym')));
     }
     function validMeta(d) {
       return d.keys().hasOnly(['revision','settings','nextIds','scope','accessSchemaVersion','updatedAt'])
@@ -52,13 +68,30 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$(kind + '-' + string(old))).data.kind == kind
         && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$(kind + '-' + string(old))).data.scope == 'staff');
     }
+    function validBookingCounter(old, newer, generation) {
+      return newer == old || (newer > old && newer <= old + 53
+        && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$('bookings-' + string(old))).data.kind == 'bookings'
+        && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$('bookings-' + string(newer - 1))).data.kind == 'bookings');
+    }
+    function validCreationId(generation, d) {
+      let beforeId = metaBefore(generation).nextIds[d.kind];
+      let afterId = metaAfter(generation).nextIds[d.kind];
+      return d.kind == 'bookings'
+        ? (d.value.id >= beforeId && d.value.id < afterId && afterId <= beforeId + 53)
+        : (d.value.id == beforeId && afterId == d.value.id + 1);
+    }
+    function validBookingLink(generation, d) {
+      return d.kind != 'entries' || d.value.bookingId == null
+        || (d.value.kind == 'income' && d.value.bookingId is int && d.value.bookingId > 0
+          && getAfter(/databases/$(database)/documents/clubs/avenida-padel/datasets/$(generation)/records/$('bookings-' + string(d.value.bookingId))).data.kind == 'bookings');
+    }
     function staffMetaUpdate(generation) {
       let old = resource.data;
       let newer = request.resource.data;
       return validMeta(newer)
         && newer.diff(old).affectedKeys().hasOnly(['revision','updatedAt','nextIds'])
         && newer.revision == old.revision + 1 && newer.updatedAt == request.time
-        && newer.nextIds.bookings == old.nextIds.bookings
+        && validBookingCounter(old.nextIds.bookings,newer.nextIds.bookings,generation)
         && validCounter('entries',old.nextIds.entries,newer.nextIds.entries,generation)
         && validCounter('clients',old.nextIds.clients,newer.nextIds.clients,generation)
         && validCounter('products',old.nextIds.products,newer.nextIds.products,generation);
@@ -80,18 +113,17 @@ service cloud.firestore {
     }
     match /clubs/avenida-padel/datasets/{generation}/records/{id} {
       // scope es un atributo de acceso validado en todas las escrituras, también las del administrador.
-      // El empleado DEBE consultar con where('scope', '==', 'staff'); no puede descargar la colección completa.
-      allow read: if admin() || (staff() && active(generation) && resource.data.scope == 'staff');
+      // El empleado consulta scope == staff O kind == bookings. Nunca recibe la colección completa ni Gym.
+      allow read: if admin() || (staff() && active(generation) && (resource.data.scope == 'staff' || resource.data.kind == 'bookings'));
       allow create: if (admin() && (id == '_meta' ? validMeta(request.resource.data) : validRecord(id,request.resource.data)))
-        || (staff() && active(generation) && id != '_meta' && staffRecord(request.resource.data)
+        || (staff() && active(generation) && id != '_meta' && operable(request.resource.data)
           && validRecord(id,request.resource.data)
-          && (request.resource.data.kind != 'entries' || request.resource.data.value.bookingId == null)
-          && request.resource.data.value.id == metaBefore(generation).nextIds[request.resource.data.kind]
-          && metaAfter(generation).nextIds[request.resource.data.kind] == request.resource.data.value.id + 1
+          && validBookingLink(generation,request.resource.data)
+          && validCreationId(generation,request.resource.data)
           && metaAfter(generation).revision == metaBefore(generation).revision + 1);
       allow update: if (admin() && (id == '_meta' ? validMeta(request.resource.data) : validRecord(id,request.resource.data)))
         || (staff() && active(generation) && (id == '_meta' ? staffMetaUpdate(generation)
-          : (resource.data.scope == 'staff' && staffRecord(request.resource.data) && validRecord(id,request.resource.data)
+          : ((resource.data.scope == 'staff' || resource.data.kind == 'bookings') && operable(request.resource.data) && validRecord(id,request.resource.data)
             && request.resource.data.kind == resource.data.kind
             && (request.resource.data.kind != 'entries' || request.resource.data.value.diff(resource.data.value).affectedKeys().hasOnly(['date','time','client','cash','transfer','products','amount','rate','details','concept','category','paymentMethod']))
             && metaAfter(generation).revision == metaBefore(generation).revision + 1)));

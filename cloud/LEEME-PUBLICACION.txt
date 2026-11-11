@@ -37,3 +37,5 @@ public/index.html se abre mediante Hosting HTTPS, no con doble clic en el Explor
 
 ACCESO DE EMPLEADOS (actualización)
 Para activar esta función, primero ejecutar la suite de reglas del emulador según README.md. Después publicar hosting Y reglas, no solamente Hosting, y recargar la app del propietario. Crear la cuenta de empleado en Authentication y autorizar su UID desde Accesos. La aplicación prepara el conjunto actual con permisos por registro antes de habilitar empleados; conserva todos los importes y el logo. No hay que importar nuevamente un respaldo para activar permisos. El empleado no puede eliminar registros. Las cuentas comparten los mismos datos de Pádel, con vistas diferentes según el rol.
+
+El perfil de empleado ahora también tiene Registro de turnos. Para esta actualización verificar reglas y desplegar Hosting y Firestore Rules; los perfiles existentes siguen habilitados y no hay que importar datos.

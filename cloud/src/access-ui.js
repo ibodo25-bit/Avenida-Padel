@@ -1,7 +1,7 @@
 // ACCESO_EMPLEADOS_V1
 const renderWithoutAccess=render;
 render=function(){
- if(window.Cloud?.role==='staff'&&!['income','expense','products','clients'].includes(view))view='income';
+ if(window.Cloud?.role==='staff'&&!['income','expense','products','clients','bookings'].includes(view))view='income';
  if(view==='access'&&window.Cloud?.role==='admin'){window.Cloud.renderAccess();return}
  renderWithoutAccess();window.Cloud?.applyPermissions();
 };

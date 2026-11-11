@@ -7,12 +7,12 @@ export function emptyState(){return {version:1,entries:[],clients:[],products:[]
 export function recordsOf(data){const out=new Map();for(const kind of DATA_KEYS)for(const item of data[kind]||[])out.set(kind+'-'+item.id,{kind,value:item,scope:recordScope(kind,item)});return out}
 export function decodeRecords(snapshot,normalize){let meta=null;const data=emptyState();for(const doc of snapshot.docs){const value=doc.data();if(doc.id==='_meta')meta=value;else if(DATA_KEYS.includes(value.kind))data[value.kind].push(value.value);else throw Error('Documento no reconocido en la base')}if(!meta)return null;data.settings=meta.settings||{};return {revision:meta.revision,data:normalize(data),nextIds:meta.nextIds||nextIdsOf(data),accessSchemaVersion:meta.accessSchemaVersion||1}}
 export function createSyncEngine({sdk,db,normalize,applyOperation,events={},role='admin'}){
- const {doc,collection,onSnapshot,runTransaction,writeBatch,getDoc,serverTimestamp,query,where}=sdk;
+ const {doc,collection,onSnapshot,runTransaction,writeBatch,getDoc,serverTimestamp,query,where,or}=sdk;
  const headRef=doc(db,ROOT_PATH+'/control/current');
  let generation=null,revision=-1,data=emptyState(),stopHead=null,stopRecords=null,active=true,ready=false,headEpoch=0,pending=false,nextIds=nextIdsOf(data),accessReady=false,headAccessReady=false;
  const emit=(name,...args)=>{if(active)events[name]?.(...args)};
  const recordRef=(gen,id)=>doc(db,ROOT_PATH+'/datasets/'+gen+'/records/'+id);
- const recordsRef=gen=>{const ref=collection(db,ROOT_PATH+'/datasets/'+gen+'/records');return role==='staff'?query(ref,where('scope','==','staff')):ref};
+ const recordsRef=gen=>{const ref=collection(db,ROOT_PATH+'/datasets/'+gen+'/records');return role==='staff'?query(ref,or(where('scope','==','staff'),where('kind','==','bookings'))):ref};
  function assertOnline(){if(!active)throw Error('La sesión terminó');if(globalThis.navigator?.onLine===false)throw Error('Sin conexión. Este cambio no se guardó. Volvé a intentarlo con Internet.');if(pending)throw Error('Hay otro guardado en curso. Esperá a que termine.')}
  function start(){
   stopHead=onSnapshot(headRef,{includeMetadataChanges:true},head=>{
@@ -34,12 +34,12 @@ export function createSyncEngine({sdk,db,normalize,applyOperation,events={},role
   assertOnline();if(!ready)throw Error('Esperá a que se complete la conexión a la nube.');
   const base=structuredClone(data),baseRevision=revision,baseGeneration=generation,epoch=headEpoch;
   const candidate=normalize(await operation(structuredClone(base)));
-  if(role==='staff'&&(JSON.stringify(candidate.settings)!==JSON.stringify(base.settings)||candidate.bookings.length||candidate.entries.some(e=>e.activity==='gym')))throw Error('La cuenta de empleado no puede modificar esa información.');
+  if(role==='staff'&&(JSON.stringify(candidate.settings)!==JSON.stringify(base.settings)||candidate.entries.some(e=>e.activity==='gym')))throw Error('La cuenta de empleado no puede modificar esa información.');
   const previous=recordsOf(base),next=recordsOf(candidate),changed=[];
   const candidateNextIds=nextIdsOf(candidate,nextIds);
   for(const [id,value] of next)if(JSON.stringify(value)!==JSON.stringify(previous.get(id)))changed.push({id,value});
   for(const id of previous.keys())if(!next.has(id))changed.push({id,remove:true});
-  if(role==='staff'&&changed.some(item=>item.remove||item.value.scope!=='staff'))throw Error('La cuenta de empleado permite altas y ediciones, no eliminaciones.');
+  if(role==='staff'&&changed.some(item=>item.remove||(item.value.scope!=='staff'&&item.value.kind!=='bookings')))throw Error('La cuenta de empleado permite altas y ediciones, no eliminaciones.');
   if(changed.length>450)throw Error('Son demasiados cambios para un guardado. Usá Importar respaldo para reemplazar el conjunto completo.');
   pending=true;emit('status','Guardando…');
   try{
